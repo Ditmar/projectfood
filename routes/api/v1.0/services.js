@@ -18,10 +18,20 @@ var storage = multer.diskStorage({
     cb(null, "IMG_" + Date.now() + ".jpg");
   }
 });
+var storage_menu = multer.diskStorage({
+  destination: "./public/menu",
+  filename: function (req, file, cb) {
+    console.log("-------------------------");
+    console.log(file);
+    cb(null, "MENU_" + Date.now() + ".jpg");
+  }
+});
 var upload = multer({
   storage: storage
-}).single("img");;
-
+}).single("img");
+var upload_menu = multer({
+  storage: storage_menu
+}).single("img");
 /*
 Login USER
 */
@@ -307,9 +317,117 @@ router.post("/client", (req, res) => {
   });
 });
 
-
+//APIIIII--------------------------------------------------------
 //API RESTAURANTE
+//MENU
+router.get("/menu", (req, res) => {
+  var skip = 0;
+  var limit = 20;
+  var idr = req.query.idr;
+  if (req.query.skip != undefined) {
+    skip = req.query.skip;
+  }
+  if (req.query.limit != undefined) {
+    limit = req.query.limit;
+  }
+  MENUS.find({idrestaurant:idr}).skip(skip).limit(limit).exec((err, docs) => {
+    if (err) {
+      res.status(500).json({
+        msn: "Error en la base de datos"
+      });
+      return;
+    }
+    res.status(200).json(docs);
+  });
+});
+router.patch("/menu", (req, res) => {
+  var id = req.query.id;
+  var params = req.body;
+  var keys = Object.keys(params);
+  var updatekeys = ["name", "price", "description","picture"];
+  var newkeys = [];
+  var values = [];
+  //seguridad
+  for (var i  = 0; i < updatekeys.length; i++) {
+    var index = keys.indexOf(updatekeys[i]);
+    if (index != -1) {
+        newkeys.push(keys[index]);
+        values.push(params[keys[index]]);
+    }
+  }
+  var objupdate = {}
+  for (var i  = 0; i < newkeys.length; i++) {
+      objupdate[newkeys[i]] = values[i];
+  }
+  console.log(objupdate);
+  console.log(id);
+  MENUS.findOneAndUpdate({_id:id}, objupdate, (err, docs) => {
+    if (err) {
+      res.status(500).json({
+        msn : "Error en la base de datos"
+      });
+      return;
+    }
+    res.status(200).json(docs);
+  })
+});
+router.post("/menu", verifytoken,(req, res ) => {
+  var infomenu = req.body;
+  //VALIDACION
+  //OJO
+  infomenu["registerdate"] = new Date();
+  var menu = new MENUS(infomenu);
+  menu.save().then( (rr) => {
+    res.status(200).json({
+      "msn" : "Item agregado con exito"
+    });
+  });
+});
+router.post("/uploadmenu",verifytoken ,(req, res) => {
+  var id = req.query.id;
+  if (id == null) {
+    res.status(300).json({
+      "msn" : "Se debe especificar un id valido"
+    });
+    return;
+  }
+  console.log(id);
+  MENUS.find({_id:id}).exec((err, docs) => {
+    if (err) {
+      res.status(300).json({
+        "msn" : "Problemas con la base de datos"
+      });
+      return;
+    }
+    console.log(docs);
+    if (docs != null) {
+      //SUBIR EL ARCHIVO
+      upload_menu(req, res, (err) => {
+        if (err) {
+          res.status(300).json({
+            "msn" : "Error al subir la imagen"
+          });
+          return;
+        }
+        var url = req.file.path.replace(/public/g, "");
+        //docs["picture"] = url;
+        MENUS.update({_id: id}, {$set : {"picture": url}}, (err, docs) => {
+          res.status(200).json({
+            "msn" : "Exito"
+          });
+          return;
+        });
+      });
+    } else {
+      res.status(300).json({
+        "msn" : "EL id del restaurant no fue encontrado"
+      });
+      return;
+    }
+  });
+});
 
+///restaurant API
 router.post("/restaurant", verifytoken,(req, res) => {
   var data = req.body;
   //Validacion
